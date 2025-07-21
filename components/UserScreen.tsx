@@ -8,6 +8,9 @@ import {
   PrivyEmbeddedSolanaWalletProvider,
 } from "@privy-io/expo";
 import { PrivyUser } from "@privy-io/public-api";
+import { BrowserScreen } from "./BrowserScreen";
+import { WalletProvider } from "./WalletContext";
+
 
 const toMainIdentifier = (x: PrivyUser["linked_accounts"][number]) => {
   if (x.type === "phone") {
@@ -30,6 +33,7 @@ const toMainIdentifier = (x: PrivyUser["linked_accounts"][number]) => {
 
 export const UserScreen = () => {
   const [signedMessages, setSignedMessages] = useState<string[]>([]);
+  const [showBrowser, setShowBrowser] = useState(false);
 
   const { logout, user } = usePrivy() 
   const { wallets, create } = useEmbeddedSolanaWallet();
@@ -58,6 +62,15 @@ export const UserScreen = () => {
 
   if (!user) {
     return null;
+  }
+
+  // Show browser screen if browser is open
+  if (showBrowser) {
+    return (
+      <WalletProvider>
+        <BrowserScreen onClose={() => setShowBrowser(false)} />
+      </WalletProvider>
+    );
   }
 
   return (
@@ -138,6 +151,7 @@ export const UserScreen = () => {
               </React.Fragment>
             ))}
           </View>
+          <Button title="Open Browser" onPress={() => setShowBrowser(true)} />
           <Button title="Logout" onPress={logout} />
         </View>
       </ScrollView>
