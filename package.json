@@ -12,7 +12,7 @@
     "@ethersproject/shims": "^5.8.0",
     "@expo-google-fonts/inter": "^0.3.0",
     "@expo/vector-icons": "^14.1.0",
-    "@privy-io/expo": "^0.55.4",
+    "@privy-io/expo": "^0.56.1",
     "@privy-io/expo-native-extensions": "^0.0.5",
     "@privy-io/public-api": "^2.39.2",
     "@react-navigation/native": "^7.1.6",
@@ -26,22 +26,22 @@
     "expo-crypto": "~14.1.4",
     "expo-font": "~13.3.1",
     "expo-linking": "~7.1.4",
-    "expo-router": "~5.0.6",
+    "expo-router": "~5.1.4",
     "expo-secure-store": "~14.2.3",
     "expo-splash-screen": "~0.30.8",
     "expo-status-bar": "~2.2.3",
     "expo-system-ui": "~5.0.7",
-    "expo-web-browser": "~14.1.6",
+    "expo-web-browser": "~14.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "react-native": "0.79.2",
+    "react-native": "0.79.5",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-get-random-values": "^1.11.0",
     "react-native-passkeys": "^0.3.3",
     "react-native-qrcode-styled": "^0.3.3",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.10.0",
+    "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
     "react-native-webview": "13.13.5",
     "viem": "^2.31.6"
@@ -53,5 +53,6 @@
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "packageManager": "pnpm@10.8.1+sha512.c50088ba998c67b8ca8c99df8a5e02fd2ae2e2b29aaf238feaa9e124248d3f48f9fb6db2424949ff901cffbb5e0f0cc1ad6aedb602cd29450751d11c35023677"
 }

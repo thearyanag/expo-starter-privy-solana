@@ -9,19 +9,7 @@ import * as Application from "expo-application";
 export default function LoginScreen() {
   const [error, setError] = useState("");
   const {} = usePrivy();
-  const { loginWithPasskey } = useLoginWithPasskey({
-    onError: (err) => {
-      console.log(err);
-      setError(JSON.stringify(err.message));
-    },
-  });
   const { login } = useLogin();
-  const oauth = useLoginWithOAuth({
-    onError: (err) => {
-      console.log(err);
-      setError(JSON.stringify(err.message));
-    },
-  });
   return (
     <View
       style={{
