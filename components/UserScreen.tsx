@@ -3,13 +3,10 @@ import { Text, TextInput, View, Button, ScrollView } from "react-native";
 
 import {
   usePrivy,
-  useEmbeddedEthereumWallet,
-  getUserEmbeddedEthereumWallet,
-  PrivyEmbeddedWalletProvider,
-  useLinkWithOAuth,
+  useEmbeddedSolanaWallet,
+  getUserEmbeddedSolanaWallet,
+  PrivyEmbeddedSolanaWalletProvider,
 } from "@privy-io/expo";
-import Constants from "expo-constants";
-import { useLinkWithPasskey } from "@privy-io/expo/passkey";
 import { PrivyUser } from "@privy-io/public-api";
 
 const toMainIdentifier = (x: PrivyUser["linked_accounts"][number]) => {
@@ -32,24 +29,23 @@ const toMainIdentifier = (x: PrivyUser["linked_accounts"][number]) => {
 };
 
 export const UserScreen = () => {
-  const [chainId, setChainId] = useState("1");
   const [signedMessages, setSignedMessages] = useState<string[]>([]);
 
-  const { logout, user } = usePrivy();
-  const { linkWithPasskey } = useLinkWithPasskey();
-  const oauth = useLinkWithOAuth();
-  const { wallets, create } = useEmbeddedEthereumWallet();
-  const account = getUserEmbeddedEthereumWallet(user);
+  const { logout, user } = usePrivy() 
+  const { wallets, create } = useEmbeddedSolanaWallet();
+  const account = getUserEmbeddedSolanaWallet(user);
 
   const signMessage = useCallback(
-    async (provider: PrivyEmbeddedWalletProvider) => {
+    async (provider: PrivyEmbeddedSolanaWalletProvider) => {
       try {
         const message = await provider.request({
-          method: "personal_sign",
-          params: [`0x0${Date.now()}`, account?.address],
+          method: 'signMessage',
+          params: {
+            message: `0x0${Date.now()}`,
+          },
         });
         if (message) {
-          setSignedMessages((prev) => prev.concat(message));
+          setSignedMessages((prev) => prev.concat(message.signature));
         }
       } catch (e) {
         console.error(e);
@@ -58,20 +54,7 @@ export const UserScreen = () => {
     [account?.address]
   );
 
-  const switchChain = useCallback(
-    async (provider: PrivyEmbeddedWalletProvider, id: string) => {
-      try {
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: id }],
-        });
-        alert(`Chain switched to ${id} successfully`);
-      } catch (e) {
-        console.error(e);
-      }
-    },
-    [account?.address]
-  );
+
 
   if (!user) {
     return null;
@@ -79,25 +62,6 @@ export const UserScreen = () => {
 
   return (
     <View>
-      <Button
-        title="Link Passkey"
-        onPress={() =>
-          linkWithPasskey({
-            relyingParty: Constants.expoConfig?.extra?.passkeyAssociatedDomain,
-          })
-        }
-      />
-      <View style={{ display: "flex", flexDirection: "column", margin: 10 }}>
-        {(["github", "google", "discord", "apple"] as const).map((provider) => (
-          <View key={provider}>
-            <Button
-              title={`Link ${provider}`}
-              disabled={oauth.state.status === "loading"}
-              onPress={() => oauth.link({ provider })}
-            ></Button>
-          </View>
-        ))}
-      </View>
 
       <ScrollView style={{ borderColor: "rgba(0,0,0,0.1)", borderWidth: 1 }}>
         <View
@@ -141,28 +105,15 @@ export const UserScreen = () => {
               </>
             )}
 
-            <Button title="Create Wallet" onPress={() => create()} />
+            <Button title="arya Wallet" onPress={() => create?.()} />
 
-            <>
-              <Text>Chain ID to set to:</Text>
-              <TextInput
-                value={chainId}
-                onChangeText={setChainId}
-                placeholder="Chain Id"
-              />
-              <Button
-                title="Switch Chain"
-                onPress={async () =>
-                  switchChain(await wallets[0].getProvider(), chainId)
-                }
-              />
-            </>
+
           </View>
 
           <View style={{ display: "flex", flexDirection: "column" }}>
             <Button
               title="Sign Message"
-              onPress={async () => signMessage(await wallets[0].getProvider())}
+              onPress={async () => signMessage(await wallets![0].getProvider()!)}
             />
 
             <Text>Messages signed:</Text>

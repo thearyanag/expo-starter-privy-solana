@@ -14,6 +14,7 @@
     "@expo/vector-icons": "^14.1.0",
     "@privy-io/expo": "^0.55.4",
     "@privy-io/expo-native-extensions": "^0.0.5",
+    "@privy-io/public-api": "^2.39.2",
     "@react-navigation/native": "^7.1.6",
     "buffer": "^6.0.3",
     "expo": "~53.0.9",
@@ -52,6 +53,5 @@
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
   },
-  "private": true,
-  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+  "private": true
 }
