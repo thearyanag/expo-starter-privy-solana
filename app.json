@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "@privy-io/expo-starter",
-    "slug": "expo-starter",
+    "name": "Pluto Wallet",
+    "slug": "plutowallet",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,7 @@
     "ios": {
       "usesAppleSignIn": true,
       "supportsTablet": true,
-      "bundleIdentifier": "dev.privy.example",
+      "bundleIdentifier": "com.sendai.plutowallet",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
@@ -28,11 +28,11 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "dev.privy.example"
+      "package": "com.sendai.plutowallet"
     },
     "extra": {
-      "privyAppId": "cmbde6jv2008pjs0mlt1fibfj",
-      "privyClientId": "client-WY6M9gRbbdnQ5T7cYr7ffUpX1PxcFLSWHzWnrSyCqySHX"
+      "privyAppId": "cmcc67p4f008okz0lwmryx9uj",
+      "privyClientId": "client-WY6N2joqpqWTd85bhy4zm5HF9M5h6edSiknCpzDc32Lcj"
     },
     "plugins": [
       "expo-router",

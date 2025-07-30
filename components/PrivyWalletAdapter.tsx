@@ -82,7 +82,9 @@ interface PlutoWallet extends EventEmitter<PlutoWalletEvents> {
   disconnect(): Promise<void>;
 }
 
-export interface PlutoWalletAdapterConfig { }
+export interface PlutoWalletAdapterConfig {
+  provider: PrivyEmbeddedSolanaWalletProvider | null;
+}
 
 export const PlutoWalletAdapterConfig = 'Pluto' as WalletName<'Pluto'>;
 
@@ -101,32 +103,22 @@ export class PlutoWalletAdapter extends BaseMessageSignerWalletAdapter {
       : WalletReadyState.NotDetected;
   private _provider: PrivyEmbeddedSolanaWalletProvider | null;
 
-  constructor(config: PlutoWalletAdapterConfig = {}) {
-    super();
-    this._connecting = false;
-    this._wallet = null;
-    this._publicKey = null;
-    this._provider = null;
-
-    if (this._readyState !== WalletReadyState.Unsupported) {
-      if (isIosAndRedirectable()) {
-        // when in iOS (not webview), set Pluto as loadable instead of checking for install
-        this._readyState = WalletReadyState.Loadable;
-        this.emit('readyStateChange', this._readyState);
-      } else {
-        scopePollingDetectionStrategy(() => {
-          if (window.pluto?.solana?.isPluto || window.solana?.isPluto) {
-            this._readyState = WalletReadyState.Installed;
-            this.emit('readyStateChange', this._readyState);
-            return true;
-          }
-          return false;
-        });
-      }
+  constructor(config: PlutoWalletAdapterConfig = {
+    provider: null,
+  }) {
+    if (!config.provider) {
+      throw new Error("Provider is required");
     }
+    super();
+    this._connecting = true;
+    this._readyState = WalletReadyState.Installed;
+    this._wallet = null;
+    this._publicKey = new PublicKey(config.provider._publicKey);
+    this._provider = config.provider;
   }
 
   get publicKey(): PublicKey | null {
+    if (!this._provider) return null;
     return this._publicKey;
   }
 

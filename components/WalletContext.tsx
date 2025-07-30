@@ -31,7 +31,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       try {
         if (wallets && wallets.length > 0) {
           const provider = await wallets[0].getProvider();
-          const adapter = new PlutoWalletAdapter({});
+          const adapter = new PlutoWalletAdapter({
+            provider: provider,
+          });
           setWallet(adapter);
         }
       } catch (error) {

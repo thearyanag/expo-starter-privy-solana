@@ -10,6 +10,7 @@ import {
 import { PrivyUser } from "@privy-io/public-api";
 import { BrowserScreen } from "./BrowserScreen";
 import { WalletProvider } from "./WalletContext";
+import { Connection, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 
 
 const toMainIdentifier = (x: PrivyUser["linked_accounts"][number]) => {
@@ -58,7 +59,39 @@ export const UserScreen = () => {
     [account?.address]
   );
 
+  const getlamportstx = new Transaction().add(SystemProgram.transfer({
+    fromPubkey: new PublicKey(wallets![0].address),
+    toPubkey: new PublicKey(wallets![0].address),
+    lamports: 1000000000,
+  }))
 
+  const signTransaction = useCallback(
+    async (provider: PrivyEmbeddedSolanaWalletProvider) => {
+      try {
+
+        const tx = getlamportstx
+        const connection = new Connection("https://api.devnet.solana.com")
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+        tx.feePayer = new PublicKey(wallets![0].address)
+
+        const transaction = await provider.request({
+          method: 'signTransaction',
+          params: {
+            transaction: tx
+          },
+        });
+        if (transaction) {
+          setSignedMessages((prev) => prev.concat(Buffer.from(transaction.signedTransaction.serialize({
+            requireAllSignatures: false,
+            verifySignatures: false,
+          })).toString('base64')));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    [account?.address]
+  );
 
   if (!user) {
     return null;
@@ -127,6 +160,11 @@ export const UserScreen = () => {
             <Button
               title="Sign Message"
               onPress={async () => signMessage(await wallets![0].getProvider()!)}
+            />
+
+<Button
+              title="Sign Transaction"
+              onPress={async () => signTransaction(await wallets![0].getProvider()!)}
             />
 
             <Text>Messages signed:</Text>
