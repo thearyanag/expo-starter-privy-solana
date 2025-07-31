@@ -49,6 +49,7 @@ export const UserScreen = () => {
             message: `0x0${Date.now()}`,
           },
         });
+        console.log('signed message', message)
         if (message) {
           setSignedMessages((prev) => prev.concat(message.signature));
         }
