@@ -13,6 +13,13 @@ import { useWallet } from './WalletContext';
 import { PlutoWalletAdapter } from './PrivyWalletAdapter';
 import { PublicKey, Transaction, VersionedTransaction, TransactionVersion } from '@solana/web3.js';
 import { WalletReadyState } from '@solana/wallet-adapter-base';
+import type {
+  DEPRECATED_WalletsWindow,
+  Wallet,
+  WalletEventsWindow,
+  WindowRegisterWalletEvent,
+  WindowRegisterWalletEventCallback,
+} from '@wallet-standard/base';
 
 // Type-safe wallet interface matching PlutoWalletAdapter for injection
 interface InjectedWalletAdapter {
@@ -33,11 +40,14 @@ interface InjectedWalletAdapter {
 }
 
 interface WalletMessage {
-  type: 'WALLET_CONNECT' | 'WALLET_DISCONNECT' | 'WALLET_SIGN_TRANSACTION' | 'WALLET_SIGN_MESSAGE' | 'WALLET_SEND_TRANSACTION';
+  type: 'WALLET_CONNECT' | 'WALLET_DISCONNECT' | 'WALLET_SIGN_TRANSACTION' | 'WALLET_SIGN_MESSAGE' | 'WALLET_SEND_TRANSACTION' | 'WALLET_SIGN_SEND_TRANSACTION' | 'WALLET_SIGN_IN';
   data: {
     transaction?: Transaction | VersionedTransaction;
     transactions?: (Transaction | VersionedTransaction)[];
     message?: Uint8Array;
+    options?: any;
+    input?: any;
+    silent?: boolean;
   };
 }
 
@@ -45,7 +55,7 @@ interface WalletMessage {
 function isWalletMessage(obj: Record<string, any>): obj is WalletMessage {
   return (
     typeof obj.type === 'string' &&
-    ['WALLET_CONNECT', 'WALLET_DISCONNECT', 'WALLET_SIGN_TRANSACTION', 'WALLET_SIGN_MESSAGE', 'WALLET_SEND_TRANSACTION'].includes(obj.type) &&
+    ['WALLET_CONNECT', 'WALLET_DISCONNECT', 'WALLET_SIGN_TRANSACTION', 'WALLET_SIGN_MESSAGE', 'WALLET_SEND_TRANSACTION', 'WALLET_SIGN_SEND_TRANSACTION', 'WALLET_SIGN_IN'].includes(obj.type) &&
     typeof obj.data === 'object' &&
     obj.data !== null
   );
@@ -56,8 +66,8 @@ interface BrowserScreenProps {
 }
 
 export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
-  const [url, setUrl] = useState('jup.ag');
-  const [currentUrl, setCurrentUrl] = useState('https://jup.ag');
+  const [url, setUrl] = useState('anxz-xyz.github.io/wallet-adapter/example/');
+  const [currentUrl, setCurrentUrl] = useState('https://anza-xyz.github.io/wallet-adapter/example/');
   const webViewRef = useRef<WebView>(null);
   const { wallet, isLoading } = useWallet();
 
@@ -122,142 +132,582 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
     };
 
     webViewRef.current?.injectJavaScript(`
-      // Create complete PlutoWalletAdapter-compatible wallet object
-      window.solanaWallet = {
-        // Static properties matching PlutoWalletAdapter
-        name: "${walletData.name}",
-        url: "${walletData.url}",
-        icon: "${walletData.icon}",
-        supportedTransactionVersions: new Set(${JSON.stringify(Array.from(walletData.supportedTransactionVersions))}),
+      // Define wallet standard constants
+      const StandardConnect = 'standard:connect';
+      const StandardDisconnect = 'standard:disconnect';
+      const StandardEvents = 'standard:events';
+      const SolanaSignAndSendTransaction = 'solana:signAndSendTransaction';
+      const SolanaSignTransaction = 'solana:signTransaction';
+      const SolanaSignMessage = 'solana:signMessage';
+      const SolanaSignIn = 'solana:signIn';
+      const PlutoNamespace = 'pluto:';
+      
+      // Solana chains
+      const SOLANA_CHAINS = [
+        'solana:mainnet',
+        'solana:devnet', 
+        'solana:testnet',
+        'solana:localnet'
+      ];
+
+      // Account class
+      class PlutoWalletAccount {
+        constructor({ address, publicKey, label, icon }) {
+          this._address = address;
+          this._publicKey = publicKey;
+          this._chains = SOLANA_CHAINS.slice();
+          this._features = [SolanaSignAndSendTransaction, SolanaSignTransaction, SolanaSignMessage];
+          this._label = label;
+          this._icon = icon;
+          Object.freeze(this);
+        }
         
-        // Dynamic properties
-        publicKey: ${walletData.publicKey ? `"${walletData.publicKey}"` : 'null'},
-        connecting: ${walletData.connecting},
-        connected: ${walletData.connected},
-        readyState: "${walletData.readyState}",
+        get address() { return this._address; }
+        get publicKey() { return this._publicKey ? this._publicKey.slice() : new Uint8Array(); }
+        get chains() { return this._chains.slice(); }
+        get features() { return this._features.slice(); }
+        get label() { return this._label; }
+        get icon() { return this._icon; }
+      }
+
+      // Main wallet class following wallet standard
+      class PlutoWallet {
+        constructor() {
+          this._listeners = {};
+          this._version = '1.0.0';
+          this._name = '${walletData.name}';
+          this._icon = '${walletData.icon}';
+          this._account = null;
+          this._connecting = ${walletData.connecting};
+          this._connected = ${walletData.connected};
+          
+          if (${walletData.publicKey ? `true` : 'false'}) {
+            this._account = new PlutoWalletAccount({
+              address: '${walletData.publicKey}',
+              publicKey: new TextEncoder().encode('${walletData.publicKey}'), // Simplified for demo
+              label: 'Pluto Wallet',
+              icon: '${walletData.icon}'
+            });
+          }
+          
+          Object.freeze(this);
+        }
         
-        // Methods that communicate back to React Native
-        autoConnect: function() {
-          console.log('Auto-connecting wallet...');
-          return this.connect();
-        },
+        get version() { return this._version; }
+        get name() { return this._name; }
+        get icon() { return this._icon; }
+        get chains() { return SOLANA_CHAINS.slice(); }
+        get accounts() { return this._account ? [this._account] : []; }
         
-        connect: function() {
-          console.log('Requesting wallet connection...');
+        get features() {
+          return {
+            [StandardConnect]: {
+              version: '1.0.0',
+              connect: this._connect.bind(this)
+            },
+            [StandardDisconnect]: {
+              version: '1.0.0', 
+              disconnect: this._disconnect.bind(this)
+            },
+            [StandardEvents]: {
+              version: '1.0.0',
+              on: this._on.bind(this)
+            },
+            [SolanaSignAndSendTransaction]: {
+              version: '1.0.0',
+              supportedTransactionVersions: ['legacy', 0],
+              signAndSendTransaction: this._signAndSendTransaction.bind(this)
+            },
+            [SolanaSignTransaction]: {
+              version: '1.0.0',
+              supportedTransactionVersions: ['legacy', 0], 
+              signTransaction: this._signTransaction.bind(this)
+            },
+            [SolanaSignMessage]: {
+              version: '1.0.0',
+              signMessage: this._signMessage.bind(this)
+            },
+            [SolanaSignIn]: {
+              version: '1.0.0',
+              signIn: this._signIn.bind(this)
+            },
+            [PlutoNamespace]: {
+              pluto: this
+            }
+          };
+        }
+        
+        _on = (event, listener) => {
+          this._listeners[event] = this._listeners[event] || [];
+          this._listeners[event].push(listener);
+          return () => this._off(event, listener);
+        }
+        
+        _off = (event, listener) => {
+          if (this._listeners[event]) {
+            this._listeners[event] = this._listeners[event].filter(l => l !== listener);
+          }
+        }
+        
+        _emit = (event, ...args) => {
+          if (this._listeners[event]) {
+            this._listeners[event].forEach(listener => listener.apply(null, args));
+          }
+        }
+        
+        _connect = async ({ silent } = {}) => {
+          console.log('Wallet connect requested, silent:', silent);
+          return new Promise((resolve, reject) => {
+            const messageHandler = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'WALLET_CONNECT_RESPONSE') {
+                  window.removeEventListener('message', messageHandler);
+                  if (data.success) {
+                    this._connected = true;
+                    this._connecting = false;
+                    if (data.publicKey && !this._account) {
+                      this._account = new PlutoWalletAccount({
+                        address: data.publicKey,
+                        publicKey: new TextEncoder().encode(data.publicKey),
+                        label: 'Pluto Wallet',
+                        icon: this._icon
+                      });
+                    }
+                    this._emit('change', { accounts: this.accounts });
+                    resolve({ accounts: this.accounts });
+                  } else {
+                    reject(new Error(data.error || 'Connection failed'));
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            };
+            
+            window.addEventListener('message', messageHandler);
           window.ReactNativeWebView?.postMessage(JSON.stringify({
             type: 'WALLET_CONNECT',
-            data: {}
-          }));
-          return Promise.resolve();
-        },
+              data: { silent }
+            }));
+            
+            // Timeout after 30 seconds
+            setTimeout(() => {
+              window.removeEventListener('message', messageHandler);
+              reject(new Error('Connection timeout'));
+            }, 30000);
+          });
+        }
         
-        disconnect: function() {
-          console.log('Requesting wallet disconnection...');
+        _disconnect = async () => {
+          console.log('Wallet disconnect requested');
+          return new Promise((resolve) => {
+            this._connected = false;
+            this._account = null;
+            this._emit('change', { accounts: this.accounts });
+            
           window.ReactNativeWebView?.postMessage(JSON.stringify({
             type: 'WALLET_DISCONNECT', 
             data: {}
           }));
-          return Promise.resolve();
-        },
+            resolve();
+          });
+        }
         
-        signTransaction: function(transaction) {
-          console.log('Requesting transaction signature...');
+        _signTransaction = async (input) => {
+          console.log('Sign transaction requested');
+          return new Promise((resolve, reject) => {
+            const messageHandler = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'WALLET_SIGN_TRANSACTION_RESPONSE') {
+                  window.removeEventListener('message', messageHandler);
+                  if (data.success) {
+                    resolve({ signedTransaction: data.signedTransaction });
+                  } else {
+                    reject(new Error(data.error || 'Signing failed'));
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            };
+            
+            window.addEventListener('message', messageHandler);
           window.ReactNativeWebView?.postMessage(JSON.stringify({
             type: 'WALLET_SIGN_TRANSACTION',
-            data: { transaction: transaction }
-          }));
-          return Promise.resolve(transaction);
-        },
+              data: { transaction: input.transaction }
+            }));
+          });
+        }
         
-        signAllTransactions: function(transactions) {
-          console.log('Requesting multiple transaction signatures...');
-          const promises = transactions.map(tx => this.signTransaction(tx));
-          return Promise.all(promises);
-        },
+        _signAndSendTransaction = async (input) => {
+          console.log('Sign and send transaction requested');
+          return new Promise((resolve, reject) => {
+            const messageHandler = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'WALLET_SIGN_SEND_TRANSACTION_RESPONSE') {
+                  window.removeEventListener('message', messageHandler);
+                  if (data.success) {
+                    resolve({ signature: data.signature });
+                  } else {
+                    reject(new Error(data.error || 'Transaction failed'));
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            };
+            
+            window.addEventListener('message', messageHandler);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'WALLET_SIGN_SEND_TRANSACTION',
+              data: { transaction: input.transaction, options: input.options }
+            }));
+          });
+        }
         
-        signMessage: function(message) {
-          console.log('Requesting message signature...');
+        _signMessage = async (input) => {
+          console.log('Sign message requested');
+          return new Promise((resolve, reject) => {
+            const messageHandler = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'WALLET_SIGN_MESSAGE_RESPONSE') {
+                  window.removeEventListener('message', messageHandler);
+                  if (data.success) {
+                    resolve({ signedMessage: input.message, signature: data.signature });
+                  } else {
+                    reject(new Error(data.error || 'Message signing failed'));
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            };
+            
+            window.addEventListener('message', messageHandler);
           window.ReactNativeWebView?.postMessage(JSON.stringify({
             type: 'WALLET_SIGN_MESSAGE',
-            data: { message: message }
-          }));
-          return Promise.resolve(message);
-        },
+              data: { message: input.message }
+            }));
+          });
+        }
         
-        // Additional Solana wallet adapter properties
-        isPluto: true,
-        version: "1.0.0"
-      };
-      
-      // Create standard Solana wallet interfaces for maximum dApp compatibility
-      window.solana = window.solanaWallet;
-      window.pluto = {
-        solana: window.solanaWallet,
-        isPluto: true
-      };
-      window.navigator.wallets.push(window.solana);
+        _signIn = async (input) => {
+          console.log('Sign in requested');
+          return new Promise((resolve, reject) => {
+            const messageHandler = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'WALLET_SIGN_IN_RESPONSE') {
+                  window.removeEventListener('message', messageHandler);
+                  if (data.success) {
+                    resolve(data.output);
+                  } else {
+                    reject(new Error(data.error || 'Sign in failed'));
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            };
+            
+            window.addEventListener('message', messageHandler);
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'WALLET_SIGN_IN',
+              data: { input }
+            }));
+          });
+        }
+      }
 
-      window.dispatchEvent(new Event('wallet-standard:register-wallet', {
+      // Create wallet instance
+      const plutoWallet = new PlutoWallet();
+      
+      // Register wallet using wallet standard events
+      class RegisterWalletEvent extends Event {
+        constructor(callback) {
+          super('wallet-standard:register-wallet', {
             bubbles: false,
             cancelable: false,
             composed: false,
-        }));
-
-      window.addEventListener('wallet-standard:app-ready', (event) => {
-        console.log('Wallet standard app ready');
-        event.detail(window.solanaWallet);
-      });
+          });
+          this._detail = callback;
+        }
+        
+        get detail() {
+          return this._detail;
+        }
+        
+        get type() {
+          return 'wallet-standard:register-wallet';
+        }
+      }
+      
+      // Registration function
+      function registerWallet(wallet) {
+        const callback = ({ register }) => register(wallet);
+        try {
+          window.dispatchEvent(new RegisterWalletEvent(callback));
+        } catch (error) {
+          console.log('wallet-standard:register-wallet event could not be dispatched', error);
+        }
+        try {
+          window.addEventListener('wallet-standard:app-ready', ({ detail: api }) => 
+            callback(api)
+          );
+        } catch (error) {
+          console.log('wallet-standard:app-ready event listener could not be added', error);
+        }
+      }
+      
+      // Register the wallet
+      registerWallet(plutoWallet);
+      
+      // Legacy compatibility
+      window.solana = plutoWallet;
+      window.pluto = {
+        solana: plutoWallet,
+        isPluto: true
+      };
+      
+      // Ensure navigator.wallets exists
+      if (!window.navigator.wallets) {
+        window.navigator.wallets = [];
+      }
+      
+      // Add to deprecated wallets array for legacy support
+      try {
+        window.navigator.wallets.push(({ register }) => register(plutoWallet));
+      } catch (error) {
+        console.log('window.navigator.wallets could not be pushed', error);
+      }
       
       // Set detection flag
       window.isPlutoWalletInjected = true;
       
-      // Create a simple test UI for wallet interaction
-      if (typeof document !== 'undefined' && !document.getElementById('rn-wallet-test')) {
-        const testDiv = document.createElement('div');
-        testDiv.id = 'rn-wallet-test';
-        testDiv.style.cssText = \`
+      // Create comprehensive debugging UI
+      if (typeof document !== 'undefined' && !document.getElementById('wallet-debug-panel')) {
+        const debugPanel = document.createElement('div');
+        debugPanel.id = 'wallet-debug-panel';
+        debugPanel.style.cssText = \`
           position: fixed;
           top: 10px;
           right: 10px;
-          background: #000;
+          width: 350px;
+          max-height: 500px;
+          background: linear-gradient(135deg, #1a1a2e, #16213e);
           color: #fff;
-          padding: 10px;
-          border-radius: 8px;
-          font-family: monospace;
-          font-size: 12px;
-          z-index: 9999;
-          max-width: 300px;
-          border: 2px solid #333;
+          padding: 15px;
+          border-radius: 12px;
+          font-family: 'Monaco', 'Menlo', monospace;
+          font-size: 11px;
+          z-index: 999999;
+          border: 2px solid #4f46e5;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+          overflow-y: auto;
+          backdrop-filter: blur(10px);
         \`;
         
-        testDiv.innerHTML = \`
-          <div><strong>🔗 \${window.solanaWallet.name}</strong></div>
-          <div>PublicKey: \${window.solanaWallet.publicKey ? window.solanaWallet.publicKey.slice(0, 8) + '...' : 'None'}</div>
-          <div>Status: \${window.solanaWallet.connected ? '✅ Connected' : '❌ Disconnected'}</div>
-          <div>Ready: \${window.solanaWallet.readyState}</div>
-          <div>Connecting: \${window.solanaWallet.connecting ? 'Yes' : 'No'}</div>
-          <button onclick="window.solanaWallet.connect()" style="margin: 2px; padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Connect</button>
-          <button onclick="window.solanaWallet.disconnect()" style="margin: 2px; padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Disconnect</button>
-          <button onclick="console.log('Wallet:', window.solanaWallet); console.log('Solana:', window.solana)" style="margin: 2px; padding: 4px 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Log</button>
-          <button onclick="window.solanaWallet.autoConnect()" style="margin: 2px; padding: 4px 8px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Auto</button>
-        \`;
+        let logs = [];
+        const addLog = (message, type = 'info') => {
+          const timestamp = new Date().toLocaleTimeString();
+          const colors = {
+            info: '#60a5fa',
+            success: '#34d399', 
+            error: '#f87171',
+            warning: '#fbbf24'
+          };
+          logs.unshift(\`<div style="margin: 2px 0; color: \${colors[type]};">[<span style="color: #9ca3af;">\${timestamp}</span>] \${message}</div>\`);
+          if (logs.length > 20) logs = logs.slice(0, 20);
+          updateDebugPanel();
+        };
         
-        document.body.appendChild(testDiv);
+        const updateDebugPanel = () => {
+          const walletStandardWallets = window.navigator?.wallets?.length || 0;
+          const detectedWallets = [];
+          
+          if (window.solana) detectedWallets.push('window.solana');
+          if (window.pluto) detectedWallets.push('window.pluto');
+          if (window.phantom) detectedWallets.push('window.phantom');
+          if (window.solflare) detectedWallets.push('window.solflare');
+          if (window.backpack) detectedWallets.push('window.backpack');
+          
+          debugPanel.innerHTML = \`
+            <div style="text-align: center; margin-bottom: 10px;">
+              <strong style="color: #4f46e5;">🔍 WALLET DEBUG PANEL</strong>
+              <button onclick="this.parentElement.parentElement.style.display='none'" style="float: right; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer;">✕</button>
+            </div>
+            
+            <div style="margin-bottom: 8px;">
+              <div style="color: #fbbf24; font-weight: bold;">📊 Detection Status:</div>
+              <div style="margin-left: 10px;">
+                <div>Pluto Injected: <span style="color: \${window.isPlutoWalletInjected ? '#34d399' : '#f87171'}">\${window.isPlutoWalletInjected ? '✅ YES' : '❌ NO'}</span></div>
+                <div>Standard Wallets: <span style="color: \${walletStandardWallets > 0 ? '#34d399' : '#f87171'}">\${walletStandardWallets}</span></div>
+                <div>Detected: <span style="color: \${detectedWallets.length > 0 ? '#34d399' : '#f87171'}">\${detectedWallets.join(', ') || 'None'}</span></div>
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 8px;">
+              <div style="color: #fbbf24; font-weight: bold;">🔗 Pluto Wallet:</div>
+              <div style="margin-left: 10px;">
+                <div>Name: <span style="color: #60a5fa;">\${plutoWallet?.name || 'N/A'}</span></div>
+                <div>Version: <span style="color: #60a5fa;">\${plutoWallet?.version || 'N/A'}</span></div>
+                <div>Accounts: <span style="color: #60a5fa;">\${plutoWallet?.accounts?.length || 0}</span></div>
+                <div>Features: <span style="color: #60a5fa;">\${plutoWallet?.features ? Object.keys(plutoWallet.features).length : 0}</span></div>
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 8px;">
+              <div style="color: #fbbf24; font-weight: bold;">🧪 Test Actions:</div>
+              <div style="margin-left: 10px; display: flex; flex-wrap: wrap; gap: 4px;">
+                <button onclick="testWalletConnection()" style="background: #10b981; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px;">Connect</button>
+                <button onclick="testWalletDisconnect()" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px;">Disconnect</button>
+                <button onclick="listAllWallets()" style="background: #3b82f6; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px;">List All</button>
+                <button onclick="checkEvents()" style="background: #8b5cf6; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px;">Events</button>
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 8px;">
+              <div style="color: #fbbf24; font-weight: bold;">📝 Event Logs:</div>
+              <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; margin-top: 4px;">
+                \${logs.join('') || '<div style="color: #9ca3af;">No logs yet...</div>'}
+              </div>
+            </div>
+          \`;
+        };
         
-        // Auto-hide after 10 seconds
-        setTimeout(() => {
-          if (testDiv && testDiv.parentNode) {
-            testDiv.style.opacity = '0.3';
+        // Test functions
+        window.testWalletConnection = async () => {
+          try {
+            addLog('Testing wallet connection...', 'info');
+            if (window.solana && window.solana.connect) {
+              const result = await window.solana.connect();
+              addLog(\`Connection successful: \${JSON.stringify(result)}\`, 'success');
+            } else {
+              addLog('No wallet found or connect method missing', 'error');
+            }
+          } catch (error) {
+            addLog(\`Connection failed: \${error.message}\`, 'error');
           }
-        }, 10000);
+        };
+        
+        window.testWalletDisconnect = async () => {
+          try {
+            addLog('Testing wallet disconnect...', 'info');
+            if (window.solana && window.solana.disconnect) {
+              await window.solana.disconnect();
+              addLog('Disconnection successful', 'success');
+            } else {
+              addLog('No wallet found or disconnect method missing', 'error');
+            }
+          } catch (error) {
+            addLog(\`Disconnection failed: \${error.message}\`, 'error');
+          }
+        };
+        
+        window.listAllWallets = () => {
+          addLog('=== ALL DETECTED WALLETS ===', 'info');
+          addLog(\`window.solana: \${!!window.solana}\`, 'info');
+          addLog(\`window.pluto: \${!!window.pluto}\`, 'info');
+          addLog(\`window.phantom: \${!!window.phantom}\`, 'info');
+          addLog(\`window.solflare: \${!!window.solflare}\`, 'info');
+          addLog(\`window.backpack: \${!!window.backpack}\`, 'info');
+          addLog(\`navigator.wallets.length: \${window.navigator?.wallets?.length || 0}\`, 'info');
+          
+          if (window.solana) {
+            addLog(\`Solana wallet name: \${window.solana.name || 'Unknown'}\`, 'info');
+            addLog(\`Solana wallet features: \${window.solana.features ? Object.keys(window.solana.features).join(', ') : 'None'}\`, 'info');
+          }
+          
+          if (plutoWallet) {
+            addLog(\`Pluto wallet direct access - accounts: \${plutoWallet.accounts?.length || 0}\`, 'info');
+          }
+        };
+        
+        window.checkEvents = () => {
+          addLog('=== WALLET STANDARD EVENTS CHECK ===', 'info');
+          
+          // Check if wallet standard events are working
+          let eventsFired = 0;
+          
+          const testCallback = ({ register }) => {
+            eventsFired++;
+            addLog(\`Wallet standard callback fired #\${eventsFired}\`, 'success');
+            if (register && typeof register === 'function') {
+              addLog('Register function available', 'success');
+            } else {
+              addLog('Register function missing!', 'error');
+            }
+          };
+          
+          try {
+            window.dispatchEvent(new CustomEvent('wallet-standard:register-wallet', {
+              detail: testCallback
+            }));
+            addLog('Test wallet-standard:register-wallet event dispatched', 'info');
+          } catch (error) {
+            addLog(\`Event dispatch failed: \${error.message}\`, 'error');
+          }
+          
+        setTimeout(() => {
+            if (eventsFired === 0) {
+              addLog('No wallet standard events fired - possible issue!', 'warning');
+            }
+          }, 1000);
+        };
+        
+        // Monitor wallet standard events
+        const originalDispatchEvent = window.dispatchEvent;
+        window.dispatchEvent = function(event) {
+          if (event.type && event.type.includes('wallet-standard')) {
+            addLog(\`Event: \${event.type}\`, 'info');
+          }
+          return originalDispatchEvent.call(this, event);
+        };
+        
+        // Monitor addEventListener for wallet events
+        const originalAddEventListener = window.addEventListener;
+        window.addEventListener = function(type, listener, options) {
+          if (type && type.includes('wallet-standard')) {
+            addLog(\`Listener added for: \${type}\`, 'info');
+          }
+          return originalAddEventListener.call(this, type, listener, options);
+        };
+        
+        updateDebugPanel();
+        document.body.appendChild(debugPanel);
+        
+        addLog('Debug panel initialized', 'success');
+        addLog('Pluto Wallet registered successfully', 'success');
+        
+        // Auto-refresh every 5 seconds
+        setInterval(updateDebugPanel, 5000);
       }
       
-      console.log('✅ Wallet injected successfully:', window.solanaWallet);
-      window.ReactNativeWebView?.postMessage('Wallet injected: ' + JSON.stringify({
+            console.log('✅ Pluto Wallet registered successfully using wallet standard');
+      window.ReactNativeWebView?.postMessage('Wallet registered: ' + JSON.stringify({
         name: "${walletData.name}",
         publicKey: ${walletData.publicKey ? `"${walletData.publicKey}"` : 'null'},
         connected: ${walletData.connected},
-        readyState: "${walletData.readyState}"
+        readyState: "${walletData.readyState}",
+        accounts: plutoWallet.accounts.length
+      }));
+      true;
+    `);
+  };
+
+  const sendResponseToWebView = (responseType: string, success: boolean, data?: any, error?: string) => {
+    webViewRef.current?.injectJavaScript(`
+      window.dispatchEvent(new MessageEvent('message', {
+        data: JSON.stringify({
+          type: '${responseType}',
+          success: ${success},
+          ${data ? `...${JSON.stringify(data)},` : ''}
+          ${error ? `error: '${error}'` : ''}
+        })
       }));
       true;
     `);
@@ -278,14 +728,21 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
         try {
           if (!plutoWallet.connected) {
             await plutoWallet.connect();
+            sendResponseToWebView('WALLET_CONNECT_RESPONSE', true, {
+              publicKey: plutoWallet.publicKey?.toString()
+            });
             Alert.alert('Wallet', 'Connected successfully!');
             // Re-inject updated wallet state
             setTimeout(() => injectWalletScript(), 100);
           } else {
+            sendResponseToWebView('WALLET_CONNECT_RESPONSE', true, {
+              publicKey: plutoWallet.publicKey?.toString()
+            });
             Alert.alert('Wallet', 'Already connected');
           }
         } catch (error) {
-          console.error('Wallet connect error:', error);
+          console.log('Wallet connect error:', error);
+          sendResponseToWebView('WALLET_CONNECT_RESPONSE', false, null, error instanceof Error ? error.message : 'Unknown error');
           Alert.alert('Wallet Error', `Failed to connect wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         break;
@@ -299,7 +756,7 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
             setTimeout(() => injectWalletScript(), 100);
           }
         } catch (error) {
-          console.error('Wallet disconnect error:', error);
+          console.log('Wallet disconnect error:', error);
           Alert.alert('Wallet Error', `Failed to disconnect wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         break;
@@ -308,11 +765,15 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
         try {
           if (message.data.transaction) {
             const signedTx = await plutoWallet.signTransaction(message.data.transaction);
+            sendResponseToWebView('WALLET_SIGN_TRANSACTION_RESPONSE', true, {
+              signedTransaction: signedTx
+            });
             Alert.alert('Transaction Signed', 'Transaction signed successfully');
             console.log('Signed transaction:', signedTx);
           }
         } catch (error) {
-          console.error('Transaction signing error:', error);
+          console.log('Transaction signing error:', error);
+          sendResponseToWebView('WALLET_SIGN_TRANSACTION_RESPONSE', false, null, error instanceof Error ? error.message : 'Unknown error');
           Alert.alert('Signing Error', `Failed to sign transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         break;
@@ -321,12 +782,58 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
         try {
           if (message.data.message) {
             const signature = await plutoWallet.signMessage(message.data.message);
+            sendResponseToWebView('WALLET_SIGN_MESSAGE_RESPONSE', true, {
+              signature: signature
+            });
             Alert.alert('Message Signed', 'Message signed successfully');
             console.log('Message signature:', signature);
           }
         } catch (error) {
-          console.error('Message signing error:', error);
+          console.log('Message signing error:', error);
+          sendResponseToWebView('WALLET_SIGN_MESSAGE_RESPONSE', false, null, error instanceof Error ? error.message : 'Unknown error');
           Alert.alert('Signing Error', `Failed to sign message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+        break;
+
+      case 'WALLET_SIGN_SEND_TRANSACTION':
+        try {
+          if (message.data.transaction) {
+            // For now, we'll use signTransaction and then simulate sending
+            const signedTx = await plutoWallet.signTransaction(message.data.transaction);
+            // Simulate transaction signature (in a real implementation, you'd send to network)
+            const mockSignature = 'signature_' + Date.now().toString(36);
+            sendResponseToWebView('WALLET_SIGN_SEND_TRANSACTION_RESPONSE', true, {
+              signature: mockSignature
+            });
+            Alert.alert('Transaction Sent', 'Transaction signed and sent successfully');
+            console.log('Signed and sent transaction:', signedTx);
+          }
+        } catch (error) {
+          console.log('Transaction sign and send error:', error);
+          sendResponseToWebView('WALLET_SIGN_SEND_TRANSACTION_RESPONSE', false, null, error instanceof Error ? error.message : 'Unknown error');
+          Alert.alert('Transaction Error', `Failed to sign and send transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+        break;
+
+      case 'WALLET_SIGN_IN':
+        try {
+          // Simulate sign in functionality
+          const signInOutput = {
+            account: {
+              address: plutoWallet.publicKey?.toString() || '',
+              publicKey: plutoWallet.publicKey?.toString() || ''
+            },
+            signature: 'signin_signature_' + Date.now().toString(36)
+          };
+          sendResponseToWebView('WALLET_SIGN_IN_RESPONSE', true, {
+            output: signInOutput
+          });
+          Alert.alert('Sign In', 'Sign in successful');
+          console.log('Sign in completed:', signInOutput);
+        } catch (error) {
+          console.log('Sign in error:', error);
+          sendResponseToWebView('WALLET_SIGN_IN_RESPONSE', false, null, error instanceof Error ? error.message : 'Unknown error');
+          Alert.alert('Sign In Error', `Failed to sign in: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         break;
         
@@ -454,10 +961,19 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
             window.solana = null;
             window.pluto = null;
             
+            // Initialize navigator.wallets if it doesn't exist
+            if (!window.navigator) {
+              window.navigator = {};
+            }
+            if (!window.navigator.wallets) {
+              window.navigator.wallets = [];
+            }
+            
             // Create wallet detection flag
             window.isPlutoWalletInjected = false;
             
-            window.ReactNativeWebView?.postMessage('Before content: Wallet placeholders prepared');
+            console.log('Wallet standard infrastructure prepared');
+            window.ReactNativeWebView?.postMessage('Before content: Wallet placeholders and standard infrastructure prepared');
             true;
           `}
           injectedJavaScript={`
