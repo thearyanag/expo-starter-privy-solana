@@ -45,7 +45,7 @@ interface InjectedWalletAdapter {
 interface WalletMessage {
   type: 'WALLET_CONNECT' | 'WALLET_DISCONNECT' | 'WALLET_SIGN_TRANSACTION' | 'WALLET_SIGN_MESSAGE' | 'WALLET_SEND_TRANSACTION' | 'WALLET_SIGN_SEND_TRANSACTION' | 'WALLET_SIGN_IN';
   data: {
-    transaction?: Transaction | VersionedTransaction;
+    transaction?: Uint8Array<ArrayBufferLike> | number[] | Buffer;
     transactions?: (Transaction | VersionedTransaction)[];
     message?: Uint8Array;
     options?: any;
@@ -628,6 +628,33 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
     }
   };
 
+  const convertTransactionData = (transactionData: any): Uint8Array => {
+    if (typeof transactionData === 'object' && transactionData !== null && !Array.isArray(transactionData)) {
+      // Convert object with numeric keys to Uint8Array
+      return new Uint8Array(Object.values(transactionData) as number[]);
+    } else if (transactionData instanceof Uint8Array) {
+      return transactionData;
+    } else if (Array.isArray(transactionData)) {
+      return new Uint8Array(transactionData);
+    } else {
+      throw new Error('Invalid transaction data format');
+    }
+  };
+
+  const parseTransaction = (transactionBytes: Uint8Array): Transaction | VersionedTransaction => {
+    try {
+      // Try to parse as versioned transaction first
+      return VersionedTransaction.deserialize(transactionBytes);
+    } catch (versionedError) {
+      try {
+        // Fallback to legacy transaction
+        return Transaction.from(transactionBytes);
+      } catch (legacyError) {
+        throw new Error(`Failed to parse transaction: Versioned error: ${versionedError}, Legacy error: ${legacyError}`);
+      }
+    }
+  };
+
   const showConfirmationModal = (message: WalletMessage) => {
     setPendingRequest(message);
     setShowConfirmModal(true);
@@ -720,10 +747,13 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
       case 'WALLET_SIGN_TRANSACTION':
         try {
           if (message.data.transaction) {
+            const transactionBytes = convertTransactionData(message.data.transaction);
+            const transaction = parseTransaction(transactionBytes);
+            
             const response = await privyProvider.request({
               method: 'signTransaction',
               params: {
-                transaction: message.data.transaction
+                transaction: transaction
               }
             });
             
@@ -731,7 +761,7 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
               signedTransaction: response.signedTransaction
             });
             Alert.alert('Transaction Signed', 'Transaction signed successfully');
-            console.log('Signed transaction:', response.signedTransaction);
+            console.log('Signed transaction:', Buffer.from((response.signedTransaction as VersionedTransaction).serialize()).toString('base64'));
           }
         } catch (error) {
           console.log('Transaction signing error:', error);
@@ -743,12 +773,15 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
       case 'WALLET_SIGN_SEND_TRANSACTION':
         try {
           if (message.data.transaction) {
+            const transactionBytes = convertTransactionData(message.data.transaction);
+            const transaction = parseTransaction(transactionBytes);
+            
             // For sign and send, we could implement sending to network here
             // For now, just sign and return a mock signature
             const response = await privyProvider.request({
               method: 'signTransaction',
               params: {
-                transaction: message.data.transaction
+                transaction: transaction
               }
             });
             
@@ -979,12 +1012,6 @@ export const BrowserScreen: React.FC<BrowserScreenProps> = ({ onClose }) => {
             
             console.log('Wallet standard infrastructure prepared');
             window.ReactNativeWebView?.postMessage('Before content: Wallet placeholders and standard infrastructure prepared');
-            true;
-          `}
-          injectedJavaScript={`
-            console.log('Script injected after content loaded');
-            console.log('window.test:', window.test);
-            window.ReactNativeWebView?.postMessage('After content: window.test = ' + window.test);
             true;
           `}
         />
